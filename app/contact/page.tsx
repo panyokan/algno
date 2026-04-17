@@ -6,12 +6,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, MapPin, Phone, Send, CheckCircle } from "lucide-react";
+import { Mail, Phone, Send, CheckCircle, AlertCircle } from "lucide-react";
+
+type FormErrors = Partial<Record<"name" | "email" | "subject" | "message", string>>;
 
 export default function ContactPage() {
-  const [formStatus, setFormStatus] = useState<
-    "idle" | "submitting" | "success" | "error"
-  >("idle");
+  const [formStatus, setFormStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -19,18 +19,43 @@ export default function ContactPage() {
     company: "",
     subject: "",
     message: "",
-    address: "Algonix",
   });
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [touched, setTouched] = useState<Partial<Record<keyof typeof formData, boolean>>>({});
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
+  const validate = (data: typeof formData): FormErrors => {
+    const e: FormErrors = {};
+    if (!data.name.trim()) e.name = "Full name is required.";
+    if (!data.email.trim()) e.email = "Email address is required.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) e.email = "Please enter a valid email.";
+    if (!data.subject.trim()) e.subject = "Subject is required.";
+    if (!data.message.trim()) e.message = "Message is required.";
+    return e;
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const updated = { ...formData, [name]: value };
+    setFormData(updated);
+    if (touched[name as keyof typeof formData]) {
+      setErrors(validate(updated));
+    }
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name } = e.target;
+    setTouched((prev) => ({ ...prev, [name]: true }));
+    setErrors(validate(formData));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const allTouched = { name: true, email: true, subject: true, message: true };
+    setTouched(allTouched);
+    const errs = validate(formData);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
     setFormStatus("submitting");
 
     try {
@@ -45,15 +70,9 @@ export default function ContactPage() {
 
       if (response.ok) {
         setFormStatus("success");
-        setFormData({
-          name: "",
-          email: "",
-          number: "",
-          company: "",
-          subject: "",
-          message: "",
-          address: "Algonix",
-        });
+        setFormData({ name: "", email: "", number: "", company: "", subject: "", message: "" });
+        setErrors({});
+        setTouched({});
       } else {
         setFormStatus("error");
       }
@@ -63,10 +82,14 @@ export default function ContactPage() {
     }
   };
 
+  const fieldClass = (field: keyof FormErrors) =>
+    `bg-slate-800/50 border-slate-700 focus-visible:ring-purple-500 ${
+      errors[field] ? "border-red-500 focus-visible:ring-red-500" : ""
+    }`;
+
   return (
     <div className="min-h-screen py-20">
       <div className="container mx-auto px-4">
-        {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
           <div className="inline-block px-4 py-1.5 bg-gradient-to-r from-purple-600/10 to-cyan-600/10 rounded-full backdrop-blur-sm border border-purple-500/20 mb-4">
             <span className="text-sm font-medium text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
@@ -93,12 +116,9 @@ export default function ContactPage() {
                   <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-4">
                     <CheckCircle className="h-8 w-8 text-green-500" />
                   </div>
-                  <h4 className="text-xl font-bold mb-2">
-                    Message Sent Successfully!
-                  </h4>
+                  <h4 className="text-xl font-bold mb-2">Message Sent Successfully!</h4>
                   <p className="text-slate-300 mb-6">
-                    Thank you for reaching out. Our team will get back to you
-                    shortly.
+                    Thank you for reaching out. Our team will get back to you shortly.
                   </p>
                   <Button
                     onClick={() => setFormStatus("idle")}
@@ -108,11 +128,18 @@ export default function ContactPage() {
                   </Button>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} noValidate className="space-y-6">
+                  {formStatus === "error" && (
+                    <div className="flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      Something went wrong. Please try again.
+                    </div>
+                  )}
+
                   <div className="grid sm:grid-cols-2 gap-6">
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <label htmlFor="name" className="text-sm font-medium">
-                        Full Name *
+                        Full Name <span className="text-red-400">*</span>
                       </label>
                       <Input
                         id="name"
@@ -120,13 +147,18 @@ export default function ContactPage() {
                         placeholder="John Doe"
                         value={formData.name}
                         onChange={handleChange}
-                        required
-                        className="bg-slate-800/50 border-slate-700 focus-visible:ring-purple-500"
+                        onBlur={handleBlur}
+                        className={fieldClass("name")}
                       />
+                      {errors.name && (
+                        <p className="flex items-center gap-1 text-xs text-red-400">
+                          <AlertCircle className="h-3 w-3" /> {errors.name}
+                        </p>
+                      )}
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <label htmlFor="email" className="text-sm font-medium">
-                        Email Address *
+                        Email Address <span className="text-red-400">*</span>
                       </label>
                       <Input
                         id="email"
@@ -135,14 +167,19 @@ export default function ContactPage() {
                         placeholder="john@example.com"
                         value={formData.email}
                         onChange={handleChange}
-                        required
-                        className="bg-slate-800/50 border-slate-700 focus-visible:ring-purple-500"
+                        onBlur={handleBlur}
+                        className={fieldClass("email")}
                       />
+                      {errors.email && (
+                        <p className="flex items-center gap-1 text-xs text-red-400">
+                          <AlertCircle className="h-3 w-3" /> {errors.email}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="grid sm:grid-cols-2 gap-6">
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <label htmlFor="number" className="text-sm font-medium">
                         Phone Number
                       </label>
@@ -155,8 +192,7 @@ export default function ContactPage() {
                         placeholder="(555) 123-4567"
                       />
                     </div>
-
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <label htmlFor="company" className="text-sm font-medium">
                         Company Name
                       </label>
@@ -171,44 +207,29 @@ export default function ContactPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="subject"
-                      className="block text-sm font-medium"
-                    >
-                      Subject *
+                  <div className="space-y-1.5">
+                    <label htmlFor="subject" className="block text-sm font-medium">
+                      Subject <span className="text-red-400">*</span>
                     </label>
                     <Input
                       id="subject"
                       name="subject"
                       value={formData.subject}
                       onChange={handleChange}
-                      required
-                      className="bg-slate-800/50 border-slate-700 focus-visible:ring-purple-500"
+                      onBlur={handleBlur}
+                      className={fieldClass("subject")}
                       placeholder="How can we help you?"
                     />
+                    {errors.subject && (
+                      <p className="flex items-center gap-1 text-xs text-red-400">
+                        <AlertCircle className="h-3 w-3" /> {errors.subject}
+                      </p>
+                    )}
                   </div>
 
-                  {/* <div className="space-y-2">
-                    <label htmlFor="project" className="text-sm font-medium">
-                      Project Type
-                    </label>
-                    <select
-                      id="project"
-                      className="w-full bg-slate-800/50 border border-slate-700 rounded-md h-10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    >
-                      <option value="">Select a project type</option>
-                      <option value="web">Web Development</option>
-                      <option value="mobile">Mobile App</option>
-                      <option value="software">Custom Software</option>
-                      <option value="ai">AI & Machine Learning</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div> */}
-
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label htmlFor="message" className="text-sm font-medium">
-                      Message *
+                      Message <span className="text-red-400">*</span>
                     </label>
                     <Textarea
                       id="message"
@@ -216,9 +237,14 @@ export default function ContactPage() {
                       placeholder="Tell us about your project..."
                       value={formData.message}
                       onChange={handleChange}
-                      required
-                      className="min-h-[120px] bg-slate-800/50 border-slate-700 focus-visible:ring-purple-500"
+                      onBlur={handleBlur}
+                      className={`min-h-[120px] ${fieldClass("message")}`}
                     />
+                    {errors.message && (
+                      <p className="flex items-center gap-1 text-xs text-red-400">
+                        <AlertCircle className="h-3 w-3" /> {errors.message}
+                      </p>
+                    )}
                   </div>
 
                   <Button
@@ -234,19 +260,12 @@ export default function ContactPage() {
                           fill="none"
                           viewBox="0 0 24 24"
                         >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path
                             className="opacity-75"
                             fill="currentColor"
                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
+                          />
                         </svg>
                         Sending...
                       </span>
@@ -272,13 +291,8 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h4 className="font-medium mb-1">Email Us</h4>
-                    <p className="text-slate-300 mb-1">
-                      For general inquiries:
-                    </p>
-                    <a
-                      href="mailto:sales@algonixtechnologies.com"
-                      className="text-cyan-400 hover:underline"
-                    >
+                    <p className="text-slate-300 mb-1">For general inquiries:</p>
+                    <a href="mailto:sales@algonixtechnologies.com" className="text-cyan-400 hover:underline">
                       sales@algonixtechnologies.com
                     </a>
                   </div>
@@ -290,75 +304,41 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h4 className="font-medium mb-1">Call Us</h4>
-                    <p className="text-slate-300 mb-1">
-                      Monday to Sunday, 8am-9pm:
-                    </p>
-                    <a
-                      href="tel:+4917668969565"
-                      className="text-cyan-400 hover:underline"
-                    >
-                      🇩🇪 +49 176 68 969 565 
+                    <p className="text-slate-300 mb-1">Monday to Sunday, 8am-9pm:</p>
+                    <a href="tel:+4917668969565" className="text-cyan-400 hover:underline">
+                      🇩🇪 +49 176 68 969 565
                     </a>
-                    <br></br>
-
-                    <a
-                      href="tel:+251923901095"
-                      className="text-cyan-400 hover:underline"
-                    >
+                    <br />
+                    <a href="tel:+251923901095" className="text-cyan-400 hover:underline">
                       🇪🇹 +251 923 901 095
                     </a>
                   </div>
                 </div>
-
-                {/* <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-purple-500/20 flex items-center justify-center shrink-0">
-                    <MapPin className="h-6 w-6 text-purple-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium mb-1">Visit Us</h4>
-                    <p className="text-slate-300">
-                      123 Tech Street
-                      <br />
-                      Innovation Hub
-                      <br />
-                      San Francisco, CA 94105
-                    </p>
-                  </div>
-                </div> */}
               </div>
             </div>
 
             <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl p-6">
-              <h3 className="text-xl font-bold mb-4">
-                Frequently Asked Questions
-              </h3>
+              <h3 className="text-xl font-bold mb-4">Frequently Asked Questions</h3>
               <div className="space-y-4">
                 {[
                   {
                     question: "What is your typical project timeline?",
-                    answer:
-                      "Project timelines vary based on complexity, but most projects take 2-20 weeks from kickoff to launch.",
+                    answer: "Project timelines vary based on complexity, but most projects take 2-20 weeks from kickoff to launch.",
                   },
                   {
                     question: "Do you work with startups?",
-                    answer:
-                      "We love working with startups and can tailor our approach to fit your budget and timeline.",
+                    answer: "We love working with startups and can tailor our approach to fit your budget and timeline.",
                   },
                   {
                     question: "What is your pricing model?",
-                    answer:
-                      "We offer both project-based and hourly pricing depending on your needs. We'll provide a detailed quote after our initial consultation.",
+                    answer: "We offer both project-based and hourly pricing depending on your needs. We'll provide a detailed quote after our initial consultation.",
                   },
                   {
                     question: "Do you provide ongoing support?",
-                    answer:
-                      "Yes, we offer maintenance and support packages to ensure your solution continues to run smoothly after launch.",
+                    answer: "Yes, we offer maintenance and support packages to ensure your solution continues to run smoothly after launch.",
                   },
                 ].map((faq, index) => (
-                  <div
-                    key={index}
-                    className="border-b border-slate-800 pb-4 last:border-0 last:pb-0"
-                  >
+                  <div key={index} className="border-b border-slate-800 pb-4 last:border-0 last:pb-0">
                     <h4 className="font-medium mb-2">{faq.question}</h4>
                     <p className="text-slate-400 text-sm">{faq.answer}</p>
                   </div>
