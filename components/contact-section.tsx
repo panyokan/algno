@@ -13,14 +13,25 @@ import AnimatedGradientText from "@/components/animated-gradient-text"
 export default function ContactSection() {
   const [formState, setFormState] = useState<"idle" | "submitting" | "success" | "error">("idle")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormState("submitting")
 
-    // Simulate form submission
-    setTimeout(() => {
-      setFormState("success")
-    }, 1500)
+    try {
+      const form = e.target as HTMLFormElement
+      const data = Object.fromEntries(new FormData(form).entries())
+      const response = await fetch("https://submit-form.com/W8m78rM5U", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(data),
+      })
+      setFormState(response.ok ? "success" : "error")
+    } catch {
+      setFormState("error")
+    }
   }
 
   return (
