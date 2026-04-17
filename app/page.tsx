@@ -98,8 +98,7 @@ export default function HomePage() {
                       </div>
                       <pre className="text-xs md:text-sm text-slate-300 overflow-hidden flex-1">
                         <code>
-                          {`import React from 'react';
-import { motion } from 'framer-motion';
+                          {`import { motion } from 'framer-motion';
 
 const App = () => {
   return (
